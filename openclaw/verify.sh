@@ -41,3 +41,6 @@ docker run --rm --platform linux/amd64 --entrypoint sh "$1" -ec '
     exit 1
   fi
 '
+
+docker run --rm -i --platform linux/amd64 --entrypoint sh "$1" -s \
+  < "$(dirname "$0")/verify-cron.sh"

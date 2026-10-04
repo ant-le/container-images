@@ -6,7 +6,8 @@ actionlint = "1.7.7"
 description = "Validate shell and GitHub Actions workflows"
 run = [
   "bash -n openclaw/verify.sh",
-  "shellcheck openclaw/verify.sh",
+  "sh -n openclaw/verify-cron.sh",
+  "shellcheck openclaw/*.sh",
   "actionlint",
 ]
 
