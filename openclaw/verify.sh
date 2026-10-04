@@ -11,6 +11,21 @@ docker run --rm --platform linux/amd64 --entrypoint sh "$1" -ec '
   set -eu
   command -v ffmpeg
   command -v whisper-cli
+  openshell --version | grep -F "0.1.2"
+  node -e '\''
+    require("fs").writeFileSync("/tmp/plugin-config.json", JSON.stringify({plugins: {
+      allow: ["openshell"],
+      load: {paths: ["/opt/openclaw-plugins/openshell/node_modules/@openclaw/openshell-sandbox"]},
+      entries: {openshell: {enabled: true}}
+    }}));
+  '\''
+  OPENCLAW_CONFIG_PATH=/tmp/plugin-config.json openclaw plugins list --json > /tmp/plugins.json
+  node -e '\''
+    const data = require("/tmp/plugins.json");
+    if (!data.plugins.some(p => p.id === "openshell" && p.status === "loaded")) {
+      throw new Error("OpenShell plugin did not load through OpenClaw");
+    }
+  '\''
   test -r /opt/whisper/ggml-small-q5_1.bin
   curl --fail --location --silent --show-error \
     https://raw.githubusercontent.com/ggml-org/whisper.cpp/927cfce34f31707e17f2bff35c349632fb9e2c3a/samples/jfk.wav \
