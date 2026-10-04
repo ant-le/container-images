@@ -14,6 +14,14 @@ and checksum-pinned OpenShell CLI 0.1.2. Runtime agents,
 credentials, model policy, networking and storage live in
 [`ant-le/server`](https://github.com/ant-le/server).
 
+The pinned gateway disables cron command payload execution and on-exit/stream
+process watchers for **all** callers, including owner/admin model turns and
+previously stored jobs. Upstream 2026.9.7 executes these on the gateway outside
+agent sandbox policy. Ordinary time-based agent jobs remain supported. The small
+build-time patch verifies the complete upstream module checksum and fails closed
+on version drift; review it on every upgrade. Deployment also disables advanced
+cron triggers so unsupported stream/script requests are rejected early.
+
 ## Local checks
 
 ```sh

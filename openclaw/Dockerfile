@@ -24,6 +24,10 @@ RUN apt-get update \
       --output /opt/whisper/ggml-small-q5_1.bin \
     && echo 'ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb  /opt/whisper/ggml-small-q5_1.bin' | sha256sum -c -
 COPY --from=whisper-build /build/whisper/build/bin/whisper-cli /usr/local/bin/whisper-cli
+COPY disable-gateway-cron-shell.mjs /tmp/disable-gateway-cron-shell.mjs
+RUN node /tmp/disable-gateway-cron-shell.mjs \
+    && node --check /app/dist/server-cron-CTlLFUyb.mjs \
+    && rm /tmp/disable-gateway-cron-shell.mjs
 # The publisher targets linux/amd64. Verify the standalone CLI before extraction.
 RUN curl --fail --location --silent --show-error \
       https://github.com/NVIDIA/OpenShell/releases/download/v0.1.2/openshell-x86_64-unknown-linux-musl.tar.gz \
