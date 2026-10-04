@@ -14,8 +14,13 @@ http.createServer((req, res) => {
   let body = "";
   req.on("data", data => body += data);
   req.on("end", () => {
+    if (req.method === "GET") {
+      res.writeHead(200, {"Content-Type": "application/json"});
+      res.end(JSON.stringify({object: "list", data: [{id: "probe", object: "model"}]}));
+      return;
+    }
     const base = {id: "cron-smoke", model: "probe", created: 1};
-    if (JSON.parse(body).stream) {
+    if (JSON.parse(body || "{}").stream) {
       res.writeHead(200, {"Content-Type": "text/event-stream"});
       for (const [delta, finish_reason] of [[{role: "assistant", content: "CRON_AGENT_OK"}, null], [{}, "stop"]]) {
         res.write("data: " + JSON.stringify({...base, object: "chat.completion.chunk", choices: [{index: 0, delta, finish_reason}]}) + "\n\n");
