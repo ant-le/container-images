@@ -1,2 +1,6 @@
 *
 !Dockerfile
+!openshell/
+openshell/**
+!openshell/package.json
+!openshell/package-lock.json

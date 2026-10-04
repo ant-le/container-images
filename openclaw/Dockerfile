@@ -24,6 +24,17 @@ RUN apt-get update \
       --output /opt/whisper/ggml-small-q5_1.bin \
     && echo 'ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb  /opt/whisper/ggml-small-q5_1.bin' | sha256sum -c -
 COPY --from=whisper-build /build/whisper/build/bin/whisper-cli /usr/local/bin/whisper-cli
+# The publisher targets linux/amd64. Verify the standalone CLI before extraction.
+RUN curl --fail --location --silent --show-error \
+      https://github.com/NVIDIA/OpenShell/releases/download/v0.1.2/openshell-x86_64-unknown-linux-musl.tar.gz \
+      --output /tmp/openshell.tar.gz \
+    && echo '7eb6917285331a09e3300266a0558616481a5e9927cae2612ea07c4045b6dd6f  /tmp/openshell.tar.gz' | sha256sum -c - \
+    && tar -xzf /tmp/openshell.tar.gz -C /usr/local/bin openshell \
+    && rm /tmp/openshell.tar.gz \
+    && openshell --version
+COPY openshell/package.json openshell/package-lock.json /opt/openclaw-plugins/openshell/
+RUN npm ci --prefix /opt/openclaw-plugins/openshell --omit=dev --legacy-peer-deps --ignore-scripts \
+    && npm cache clean --force
 # Version-matched, dependency-free external plugin; keep it outside the runtime home.
 RUN mkdir -p /opt/openclaw-plugins/parallel \
     && curl --fail --location --silent --show-error \

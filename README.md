@@ -9,7 +9,8 @@ Our own applications keep their source, Dockerfiles and tests in their own repos
 | `ghcr.io/ant-le/openclaw` | `openclaw/Dockerfile` | `openclaw/verify.sh` |
 
 OpenClaw bundles the pinned upstream gateway, whisper.cpp, FFmpeg, a multilingual
-Whisper model, and the version-matched free search plugin. Runtime agents,
+Whisper model, the version-matched free search and OpenShell sandbox plugins,
+and checksum-pinned OpenShell CLI 0.1.2. Runtime agents,
 credentials, model policy, networking and storage live in
 [`ant-le/server`](https://github.com/ant-le/server).
 
