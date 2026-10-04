@@ -1,0 +1,19 @@
+[tools]
+shellcheck = "0.10.0"
+actionlint = "1.7.7"
+
+[tasks.check]
+description = "Validate shell and GitHub Actions workflows"
+run = [
+  "bash -n openclaw/verify.sh",
+  "shellcheck openclaw/verify.sh",
+  "actionlint",
+]
+
+[tasks."openclaw:build"]
+description = "Build the OpenClaw image locally for verification only"
+run = "docker build --platform linux/amd64 -t openclaw-verify:local openclaw"
+
+[tasks."openclaw:verify"]
+description = "Smoke-test a previously built local image"
+run = "bash openclaw/verify.sh openclaw-verify:local"
