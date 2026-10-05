@@ -1,6 +1,7 @@
 *
 !Dockerfile
 !disable-gateway-cron-shell.mjs
+!openshell-agent.sh
 !openshell/
 openshell/**
 !openshell/package.json

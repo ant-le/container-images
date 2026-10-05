@@ -12,6 +12,13 @@ docker run --rm --platform linux/amd64 --entrypoint sh "$1" -ec '
   command -v ffmpeg
   command -v whisper-cli
   openshell --version | grep -F "0.1.2"
+  openshell-agent --version | grep -F "0.1.2"
+  OPENCLAW_SANDBOX_MEMORY=512Mi openshell-agent --gateway test sandbox create --help >/dev/null
+  mkdir -p /tmp/maintenance-home/.config/openclaw
+  touch /tmp/maintenance-home/.config/openclaw/openshell-maintenance
+  code=0
+  HOME=/tmp/maintenance-home openshell-agent --version >/dev/null 2>&1 || code=$?
+  test "$code" = 75
   node -e '\''
     require("fs").writeFileSync("/tmp/plugin-config.json", JSON.stringify({plugins: {
       allow: ["openshell"],

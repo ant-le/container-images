@@ -83,6 +83,10 @@ jobs:
             echo "\`$reference\`"
             echo "Source commit: \`$SOURCE_SHA\`"
             echo 'Publishing does not deploy this image. Open a deployment PR from the server checkout:'
-            echo "\`mise run openclaw:release -- $digest $SOURCE_SHA\`"
+            if [[ "$IMAGE" == ghcr.io/ant-le/openclaw:* ]]; then
+              echo "\`mise run openclaw:release -- $digest $SOURCE_SHA\`"
+            else
+              echo 'Select this digest in the corresponding server configuration and review the deployment PR.'
+            fi
             echo 'First publication: make the software-only GHCR package public before proposing deployment.'
           } >> "$GITHUB_STEP_SUMMARY"

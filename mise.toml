@@ -8,6 +8,9 @@ run = [
   "bash -n openclaw/verify.sh",
   "sh -n openclaw/verify-cron.sh",
   "shellcheck openclaw/*.sh",
+  "bash -n agent-shell/verify.sh",
+  "sh -n agent-shell/python-env.sh agent-shell/profile.sh",
+  "shellcheck agent-shell/*.sh",
   "actionlint",
 ]
 
@@ -18,3 +21,11 @@ run = "docker build --platform linux/amd64 -t openclaw-verify:local openclaw"
 [tasks."openclaw:verify"]
 description = "Smoke-test a previously built local image"
 run = "bash openclaw/verify.sh openclaw-verify:local"
+
+[tasks."agent-shell:build"]
+description = "Build the lightweight sandbox image locally for verification only"
+run = "docker build --platform linux/amd64 -t agent-shell-verify:local agent-shell"
+
+[tasks."agent-shell:verify"]
+description = "Check non-root package installation, file processing and persistence"
+run = "bash agent-shell/verify.sh agent-shell-verify:local"
