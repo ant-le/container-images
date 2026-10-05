@@ -1,0 +1,30 @@
+name: Agent shell image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - agent-shell/**
+      - .github/workflows/**
+      - mise.toml
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-shell-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  image:
+    uses: ./.github/workflows/container.yml
+    permissions:
+      contents: read
+      packages: write
+    with:
+      context: agent-shell
+      image: ghcr.io/ant-le/agent-shell
+      smoke-script: agent-shell/verify.sh
+      publish: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}

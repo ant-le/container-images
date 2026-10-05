@@ -36,6 +36,7 @@ RUN curl --fail --location --silent --show-error \
     && tar -xzf /tmp/openshell.tar.gz -C /usr/local/bin openshell \
     && rm /tmp/openshell.tar.gz \
     && openshell --version
+COPY --chmod=755 openshell-agent.sh /usr/local/bin/openshell-agent
 COPY openshell/package.json openshell/package-lock.json /opt/openclaw-plugins/openshell/
 RUN npm ci --prefix /opt/openclaw-plugins/openshell --omit=dev --legacy-peer-deps --ignore-scripts \
     && npm cache clean --force

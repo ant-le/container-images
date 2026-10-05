@@ -7,12 +7,29 @@ Our own applications keep their source, Dockerfiles and tests in their own repos
 | Image | Recipe | Verification |
 | --- | --- | --- |
 | `ghcr.io/ant-le/openclaw` | `openclaw/Dockerfile` | `openclaw/verify.sh` |
+| `ghcr.io/ant-le/agent-shell` | `agent-shell/Dockerfile` | `agent-shell/verify.sh` |
 
 OpenClaw bundles the pinned upstream gateway, whisper.cpp, FFmpeg, a multilingual
 Whisper model, the version-matched free search and OpenShell sandbox plugins,
 and checksum-pinned OpenShell CLI 0.1.2. Runtime agents,
 credentials, model policy, networking and storage live in
 [`ant-le/server`](https://github.com/ant-le/server).
+
+The lightweight agent-shell image includes Python, uv, curl, jq, SQLite and
+unzip. It runs as UID 10001. Python/uv initialize a per-agent virtual
+environment at `/sandbox/.venv` on first use, serialized with flock. The image's
+standard library is available there; optional data/PDF/spreadsheet
+libraries install with `uv pip install` (uv's own installer; pip is removed).
+Wheels are preferred exclusively by default, and
+uv never downloads another Python interpreter. `/sandbox` must be a persistent,
+writable, private volume. Keep `.venv` and `.cache` outside mirrored workspaces;
+retain dependency requirements with the project. An interpreter upgrade requires
+rebuilding the environment from those requirements. `uv cache clean`
+reclaims download caches without uninstalling packages.
+
+OpenClaw's small `openshell-agent` launcher supplies the deployment's
+`OPENCLAW_SANDBOX_MEMORY` to sandbox creation. It leaves supervisors and all other
+CLI operations unchanged. Network policy and memory budgets belong in server.
 
 The pinned gateway disables cron command payload execution and on-exit/stream
 process watchers for **all** callers, including owner/admin model turns and
@@ -30,6 +47,8 @@ mise install
 mise run check
 mise run openclaw:build
 mise run openclaw:verify
+mise run agent-shell:build
+mise run agent-shell:verify
 ```
 
 The smoke test downloads a checksum-pinned public audio sample and tests OGG/Opus
@@ -48,6 +67,8 @@ transcription. It does not prove Telegram-to-OpenClaw voice delivery.
 5. Verify the rollout and real inbound Telegram audio after deployment.
 
 Keep the first `ghcr.io/ant-le/openclaw` package public for anonymous node pulls.
+The `ghcr.io/ant-le/agent-shell` package must also be public; select its immutable
+digest in OpenClaw's OpenShell `from` setting in the server deployment PR.
 GitHub creates new packages private by default: change package visibility in
 GitHub package settings after first publication. Never embed private config or
 data in the build context. Repository visibility remains private.
