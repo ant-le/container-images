@@ -12,6 +12,7 @@ run = [
   "sh -n agent-shell/python-env.sh agent-shell/profile.sh",
   "shellcheck agent-shell/*.sh",
   "actionlint",
+  "python3 -B -m unittest discover -s openclaw/ocis-mcp -p 'test_*.py' -v",
 ]
 
 [tasks."openclaw:build"]

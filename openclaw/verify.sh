@@ -11,6 +11,7 @@ docker run --rm --platform linux/amd64 --entrypoint sh "$1" -ec '
   set -eu
   command -v ffmpeg
   command -v whisper-cli
+  command -v ocis-company-mcp
   openshell --version | grep -F "0.1.2"
   openshell-agent --version | grep -F "0.1.2"
   OPENCLAW_SANDBOX_MEMORY=512Mi openshell-agent --gateway test sandbox create --help >/dev/null
