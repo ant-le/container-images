@@ -1,3 +1,21 @@
+FROM --platform=$BUILDPLATFORM golang:1.26.8-alpine3.24@sha256:8ac98ca534ac3f51e1f420a1dd2c15e74c75cfa0f23f3ad27eb5d7236c349a0c AS ocis-mcp-build
+RUN apk add --no-cache curl python3
+WORKDIR /src
+RUN curl --fail --location --silent --show-error \
+      https://codeload.github.com/owncloud/ocis-mcp-server/tar.gz/6bea3ee263ec7d3852988e00d54e48a2a9fc7979 -o /tmp/source.tar.gz \
+    && echo '6cb4b29ba404d90d0ad683726547db159ae019cdf5e321fe6a409e9f1b236378  /tmp/source.tar.gz' | sha256sum -c - \
+    && tar -xzf /tmp/source.tar.gz --strip-components=1 -C /src
+COPY ocis-mcp/company*.go ocis-mcp/staging.py ocis-mcp/test_staging.py internal/tools/
+COPY ocis-mcp/patch.py /tmp/patch.py
+RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
+    python3 /tmp/patch.py \
+    && test -z "$(gofmt -l internal/tools/company*.go)" \
+    && timeout 240 go test ./internal/tools ./internal/client ./internal/config \
+    && python3 -B -m unittest discover -s internal/tools -p 'test_staging.py' -v
+ARG TARGETARCH
+RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -trimpath -ldflags='-s -w -X main.version=1.1.0-company.2' -o /ocis-company-mcp ./cmd/ocis-mcp-server
+
 FROM docker.io/openclaw/openclaw:2026.9.7@sha256:0da12cd49983fcb5e4915fd3135ce7a33d82f93649b1df6964946d2c1d1dbcfc AS whisper-build
 
 USER root
@@ -49,4 +67,6 @@ RUN mkdir -p /opt/openclaw-plugins/parallel \
     && tar -xzf /tmp/parallel-plugin.tgz --strip-components=1 -C /opt/openclaw-plugins/parallel \
     && rm /tmp/parallel-plugin.tgz \
     && chown -R node:node /opt/openclaw-plugins
+COPY --from=ocis-mcp-build /ocis-company-mcp /usr/local/bin/ocis-company-mcp
+COPY --from=ocis-mcp-build /src/LICENSE /usr/share/doc/ocis-company-mcp/LICENSE
 USER node

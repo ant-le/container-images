@@ -15,6 +15,18 @@ and checksum-pinned OpenShell CLI 0.1.2. Runtime agents,
 credentials, model policy, networking and storage live in
 [`ant-le/server`](https://github.com/ant-le/server).
 
+The image also packages a restricted company profile of ownCloud MCP v1.1.0.
+`openclaw/ocis-mcp/` reuses upstream discovery/SDK code and adds bounded text
+creation and binary transfer over authenticated OpenShell SSH. Transfers stage
+outside mirrored workspaces; no OpenClaw/storage-backend patch is required.
+Its tools require per-agent runtime credentials and an explicit Space allowlist
+from `server`'s nonsecret scope registry. Catalog and transfer profiles use the
+same identity/scope; listing, search and direct reads cannot use another agent's
+Spaces through the connector. Search requires one allowed Space ID. Transfers
+also require a fixed sandbox binding; catalog-only agents need no sandbox.
+They remain disabled there until the published image and runtime tests are ready.
+The image build runs Go and Python security/transfer tests before packaging.
+
 The lightweight agent-shell image includes Python, uv, curl, jq, SQLite and
 unzip. It runs as UID 10001. Python/uv initialize a per-agent virtual
 environment at `/sandbox/.venv` on first use, serialized with flock. The image's
