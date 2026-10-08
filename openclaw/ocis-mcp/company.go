@@ -11,6 +11,7 @@ import (
 	_ "embed"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
@@ -93,12 +94,12 @@ type companyPath struct {
 }
 type companyText struct {
 	SpaceID string `json:"space_id"`
-	Path    string `json:"path" jsonschema:"Requested outputs/<filename>; server allocates a fresh subfolder and returns the actual path"`
+	Path    string `json:"path" jsonschema:"Exact relative file path in this agent's output Space, e.g. report.md or reports/report.md; missing parent folders are created and an existing file is replaced"`
 	Content string `json:"content" jsonschema:"UTF-8 text, at most 100 KiB"`
 }
 type companyExport struct {
 	SpaceID    string `json:"space_id"`
-	Path       string `json:"path" jsonschema:"Requested outputs/<filename>; server allocates a fresh subfolder and returns the actual path"`
+	Path       string `json:"path" jsonschema:"Exact relative file path in this agent's output Space, e.g. report.pdf or reports/report.pdf; missing parent folders are created and an existing file is replaced"`
 	TransferID string `json:"transfer_id"`
 	SHA256     string `json:"sha256" jsonschema:"SHA-256 calculated in the sandbox after closing the output file"`
 }
@@ -140,7 +141,7 @@ func RegisterCompany(s *mcp.Server, c *client.Client, cfg *config.Config) error 
 		f.registerCatalog(s, c)
 		mcp.AddTool(s, &mcp.Tool{Name: "ocis_read_text", Description: "Read UTF-8 text up to 100 KiB. Binary files require the sandbox transfer tools.", Annotations: readOnlyAnnotations()}, f.readText)
 		if f.writeSpace != "" {
-			mcp.AddTool(s, &mcp.Tool{Name: "ocis_create_text", Description: "Create a new UTF-8 document under this agent's configured output Space/outputs. Never overwrites.", Annotations: mutatingAnnotations()}, f.createText)
+			mcp.AddTool(s, &mcp.Tool{Name: "ocis_write_text", Description: "Create or replace a UTF-8 file at the exact requested relative path in this agent's configured output Space; create missing parent folders and verify SHA-256 by read-back. Existing files are replaced: last-writer-wins, with no atomic compare-and-swap or concurrent-update protection.", Annotations: mutatingAnnotations()}, f.writeText)
 		}
 		return nil
 	}
@@ -158,7 +159,7 @@ func RegisterCompany(s *mcp.Server, c *client.Client, cfg *config.Config) error 
 	mcp.AddTool(s, &mcp.Tool{Name: "ocis_prepare_output", Description: "Reserve a staging output path for a generated file. Write and close it in sandbox exec, calculate SHA-256, then publish.", Annotations: mutatingAnnotations()}, f.prepareOutput)
 	mcp.AddTool(s, &mcp.Tool{Name: "ocis_release_transfer", Description: "Remove this transfer's temporary input/output from the sandbox after use. Does not delete any oCIS file.", Annotations: mutatingAnnotations()}, f.release)
 	if f.writeSpace != "" {
-		mcp.AddTool(s, &mcp.Tool{Name: "ocis_publish_output", Description: "Snapshot and checksum a staged output, then create a new file under this agent's output Space/outputs. Never overwrites. Uses this agent's fixed sandbox.", Annotations: mutatingAnnotations()}, f.publish)
+		mcp.AddTool(s, &mcp.Tool{Name: "ocis_publish_output", Description: "Snapshot and checksum a staged output, then create or replace the exact requested relative file path in this agent's output Space; create missing parent folders and verify SHA-256 by read-back. Existing destinations can be replaced: last-writer-wins, with no atomic compare-and-swap or concurrent-update protection. Uses this agent's fixed sandbox.", Annotations: mutatingAnnotations()}, f.publish)
 	}
 	return nil
 }
@@ -177,16 +178,32 @@ func escapedDAV(space, path string) (string, error) {
 	return "/dav/spaces/" + url.PathEscape(space) + "/" + strings.Join(parts, "/"), nil
 }
 
-func (f *companyFiles) request(ctx context.Context, method string, p companyPath, body io.Reader, size int64) (*http.Response, error) {
+func (f *companyFiles) authorizeRequest(method string, p companyPath) (string, error) {
+	switch method {
+	case "GET", "PUT", "MKCOL", "PROPFIND":
+	default:
+		return "", errors.New("unsupported DAV method")
+	}
 	if !f.readSpaces[p.SpaceID] {
-		return nil, errors.New("Space is outside this agent's configured scope")
+		return "", errors.New("Space is outside this agent's configured scope")
 	}
 	path, err := escapedDAV(p.SpaceID, p.Path)
 	if err != nil {
+		return "", err
+	}
+	if method != "GET" && (f.writeSpace == "" || p.SpaceID != f.writeSpace) {
+		return "", errors.New("writes and parent-folder checks are restricted to this agent's output Space")
+	}
+	return path, nil
+}
+
+func (f *companyFiles) request(ctx context.Context, method string, p companyPath, body io.Reader, size int64) (*http.Response, error) {
+	path, err := f.authorizeRequest(method, p)
+	if err != nil {
 		return nil, err
 	}
-	if method != "GET" && (f.writeSpace == "" || p.SpaceID != f.writeSpace || !strings.HasPrefix(p.Path, "outputs/")) {
-		return nil, errors.New("writes are restricted to this agent's output Space/outputs")
+	if method == "PROPFIND" {
+		body = strings.NewReader(`<d:propfind xmlns:d="DAV:"><d:prop><d:resourcetype/></d:prop></d:propfind>`)
 	}
 	req, err := http.NewRequestWithContext(ctx, method, f.cfg.OcisBaseURL()+path, body)
 	if err != nil {
@@ -198,14 +215,21 @@ func (f *companyFiles) request(ctx context.Context, method string, p companyPath
 		if size == 0 {
 			req.Body = http.NoBody
 		}
-		req.Header.Set("If-None-Match", "*")
 		req.Header.Set("Content-Type", "application/octet-stream")
+	}
+	if method == "PROPFIND" {
+		req.Header.Set("Depth", "0")
+		req.Header.Set("Content-Type", "application/xml")
 	}
 	resp, err := f.http.Do(req)
 	if err != nil {
 		return nil, errors.New("oCIS request failed; writes may need reconciliation before retry")
 	}
-	if (method == "GET" && resp.StatusCode != 200) || (method != "GET" && resp.StatusCode != 201) {
+	ok := (method == "GET" && resp.StatusCode == 200) ||
+		(method == "PUT" && (resp.StatusCode == 201 || resp.StatusCode == 204)) ||
+		(method == "MKCOL" && (resp.StatusCode == 201 || resp.StatusCode == 405)) ||
+		(method == "PROPFIND" && resp.StatusCode == 207)
+	if !ok {
 		resp.Body.Close()
 		return nil, fmt.Errorf("oCIS HTTP %d; no successful transfer confirmed", resp.StatusCode)
 	}
@@ -238,24 +262,77 @@ func (f *companyFiles) readText(ctx context.Context, _ *mcp.CallToolRequest, in 
 	return nil, companyResult{Content: string(b), Size: int64(len(b)), Truncated: truncated}, nil
 }
 
-func (f *companyFiles) createText(ctx context.Context, _ *mcp.CallToolRequest, in companyText) (*mcp.CallToolResult, companyResult, error) {
+func (f *companyFiles) writeText(ctx context.Context, _ *mcp.CallToolRequest, in companyText) (*mcp.CallToolResult, companyResult, error) {
 	if int64(len(in.Content)) > textLimit || !utf8.ValidString(in.Content) {
 		return nil, companyResult{}, errors.New("text exceeds limit or is not UTF-8")
 	}
 	return f.putVerified(ctx, companyPath{in.SpaceID, in.Path}, bytes.NewReader([]byte(in.Content)))
 }
 
-func (f *companyFiles) putVerified(ctx context.Context, p companyPath, file io.ReadSeeker) (call *mcp.CallToolResult, result companyResult, err error) {
-	// oCIS 8.2.1 ignores If-None-Match on PUT. Never PUT a model-selected
-	// existing path: exclusively reserve a fresh, random collection first.
-	// MKCOL rejects existing collections. Failed uploads leave a collection
-	// for human reconciliation; never reuse it or delete remote content here.
-	if _, err := escapedDAV(p.SpaceID, p.Path); err != nil {
-		return nil, companyResult{}, err
-	}
+func (f *companyFiles) ensureParents(ctx context.Context, p companyPath) error {
 	parts := strings.Split(p.Path, "/")
-	if len(parts) != 2 || parts[0] != "outputs" {
-		return nil, companyResult{}, errors.New("choose outputs/<filename>; a unique output folder is allocated automatically")
+	for i := 1; i < len(parts); i++ {
+		parent := companyPath{p.SpaceID, strings.Join(parts[:i], "/")}
+		resp, err := f.request(ctx, "MKCOL", parent, nil, 0)
+		if err != nil {
+			return err
+		}
+		resp.Body.Close()
+		if resp.StatusCode == 201 {
+			continue
+		}
+		// 405 can mean an existing file, not just a folder. Require a successful
+		// DAV resourcetype for this exact parent before descending into it.
+		resp, err = f.request(ctx, "PROPFIND", parent, nil, 0)
+		if err != nil {
+			return err
+		}
+		data, readErr := io.ReadAll(io.LimitReader(resp.Body, 65537))
+		resp.Body.Close()
+		var ms struct {
+			XMLName   xml.Name `xml:"DAV: multistatus"`
+			Responses []struct {
+				Href      string `xml:"DAV: href"`
+				Propstats []struct {
+					Status string `xml:"DAV: status"`
+					Prop   struct {
+						Type struct {
+							Collection *struct{} `xml:"DAV: collection"`
+						} `xml:"DAV: resourcetype"`
+					} `xml:"DAV: prop"`
+				} `xml:"DAV: propstat"`
+			} `xml:"DAV: response"`
+		}
+		if readErr != nil || len(data) > 65536 || xml.Unmarshal(data, &ms) != nil || len(ms.Responses) != 1 {
+			return errors.New("cannot verify existing parent folder")
+		}
+		href, err := url.Parse(ms.Responses[0].Href)
+		origin, _ := url.Parse(f.cfg.OcisBaseURL())
+		if err != nil || href.RawQuery != "" || href.Fragment != "" || href.User != nil ||
+			(href.IsAbs() && (href.Scheme != origin.Scheme || href.Host != origin.Host)) ||
+			(!href.IsAbs() && href.Host != "") ||
+			strings.TrimSuffix(href.Path, "/") != "/dav/spaces/"+parent.SpaceID+"/"+parent.Path {
+			return errors.New("parent folder metadata does not match requested path")
+		}
+		collection := false
+		for _, propstat := range ms.Responses[0].Propstats {
+			status := strings.Fields(propstat.Status)
+			if len(status) >= 2 && status[1] == "200" && propstat.Prop.Type.Collection != nil {
+				collection = true
+			}
+		}
+		if !collection {
+			return errors.New("existing parent is not a verified collection")
+		}
+	}
+	return nil
+}
+
+func (f *companyFiles) putVerified(ctx context.Context, p companyPath, file io.ReadSeeker) (call *mcp.CallToolResult, result companyResult, err error) {
+	// oCIS 8.2.1 ignores If-None-Match on PUT. This is intentionally an
+	// unconditional, last-writer-wins write; read-back is not a concurrency lock.
+	if _, err := f.authorizeRequest("PUT", p); err != nil {
+		return nil, companyResult{}, err
 	}
 	h := sha256.New()
 	n, err := io.Copy(h, io.LimitReader(file, transferLimit+1))
@@ -265,19 +342,14 @@ func (f *companyFiles) putVerified(ctx context.Context, p companyPath, file io.R
 	if _, err = file.Seek(0, io.SeekStart); err != nil {
 		return nil, companyResult{}, err
 	}
-	collection := "outputs/" + newTicket().TransferID
-	destination := collection + "/" + parts[1]
 	defer func() {
 		if err != nil {
-			err = fmt.Errorf("publication in Space %q at %q not confirmed; inspect this destination before retry: %w", p.SpaceID, destination, err)
+			err = fmt.Errorf("publication in Space %q at %q not confirmed; inspect this destination before retry: %w", p.SpaceID, p.Path, err)
 		}
 	}()
-	reserved, err := f.request(ctx, "MKCOL", companyPath{p.SpaceID, collection}, nil, 0)
-	if err != nil {
+	if err = f.ensureParents(ctx, p); err != nil {
 		return nil, companyResult{}, err
 	}
-	reserved.Body.Close()
-	p.Path = destination
 	resp, err := f.request(ctx, "PUT", p, file, n)
 	if err != nil {
 		return nil, companyResult{}, err
@@ -286,13 +358,13 @@ func (f *companyFiles) putVerified(ctx context.Context, p companyPath, file io.R
 	// Verify actual remote bytes. ETags are opaque, not content hashes.
 	resp, err = f.request(ctx, "GET", p, nil, 0)
 	if err != nil {
-		return nil, companyResult{}, errors.New("created file but read-back verification failed; inspect before retry")
+		return nil, companyResult{}, errors.New("file write accepted but read-back verification failed; inspect before retry")
 	}
 	defer resp.Body.Close()
 	check := sha256.New()
 	got, err := io.Copy(check, io.LimitReader(resp.Body, transferLimit+1))
 	if err != nil || got != n || !bytes.Equal(check.Sum(nil), h.Sum(nil)) {
-		return nil, companyResult{}, errors.New("created file but checksum verification failed; inspect before retry")
+		return nil, companyResult{}, errors.New("file write accepted but checksum verification failed; inspect before retry")
 	}
 	return nil, companyResult{Size: n, SHA256: hex.EncodeToString(h.Sum(nil)), Path: p.Path}, nil
 }
@@ -376,6 +448,9 @@ func (f *companyFiles) release(ctx context.Context, _ *mcp.CallToolRequest, in c
 }
 
 func (f *companyFiles) publish(ctx context.Context, _ *mcp.CallToolRequest, in companyExport) (*mcp.CallToolResult, companyResult, error) {
+	if _, err := f.authorizeRequest("PUT", companyPath{in.SpaceID, in.Path}); err != nil {
+		return nil, companyResult{}, err
+	}
 	return f.withTransfer(ctx, func(ctx context.Context) (companyResult, error) {
 		if !transferID.MatchString(in.TransferID) || !shaPattern.MatchString(in.SHA256) {
 			return companyResult{}, errors.New("invalid transfer ID or SHA-256")

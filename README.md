@@ -17,15 +17,35 @@ credentials, model policy, networking and storage live in
 
 The image also packages a restricted company profile of ownCloud MCP v1.1.0.
 `openclaw/ocis-mcp/` reuses upstream discovery/SDK code and adds bounded text
-creation and binary transfer over authenticated OpenShell SSH. Transfers stage
+writing and binary transfer over authenticated OpenShell SSH. Transfers stage
 outside mirrored workspaces; no OpenClaw/storage-backend patch is required.
 Its tools require per-agent runtime credentials and an explicit Space allowlist
 from `server`'s nonsecret scope registry. Catalog and transfer profiles use the
 same identity/scope; listing, search and direct reads cannot use another agent's
 Spaces through the connector. Search requires one allowed Space ID. Transfers
 also require a fixed sandbox binding; catalog-only agents need no sandbox.
-They remain disabled there until the published image and runtime tests are ready.
+Four scoped catalog/text connectors are active in the server deployment;
+binary-transfer connectors remain disabled. This checkout's exact-path write
+contract is pending image publication and GitOps rollout.
 The image build runs Go and Python security/transfer tests before packaging.
+
+Catalog tool `ocis_write_text(space_id, path, content)` creates or replaces UTF-8
+files (up to 100 KiB). Transfer tool
+`ocis_publish_output(space_id, path, transfer_id, sha256)` publishes a staged
+binary (up to 32 MiB) with the same exact-path create/replace behavior. Both accept
+root filenames or nested relative paths in **only the agent's configured output
+Space**, create missing parent folders, and return the requested `path` plus
+verified `size` and `sha256`. Existing parent paths must be DAV collections.
+Invoking either tool with an existing file path explicitly replaces that file:
+writes are last-writer-wins, without atomic compare-and-swap or concurrent-update
+protection. Read-back checksum verification confirms the bytes observed at that
+time, not a lasting lock. oCIS 8.2.1 does not enforce `If-None-Match` on PUT.
+`ocis_write_text` replaces the former `ocis_create_text` name; no alias is exposed.
+There is no remote `outputs/<random>/` allocation or mandatory `outputs/` prefix.
+Random local transfer tickets and sandbox staging confinement are unchanged.
+The connector does not expose remote delete, move or copy, and cannot write to
+canonical or other agents' Spaces. Existing backend Editor access to the own
+output Space is sufficient; no UI permission change is needed.
 
 The lightweight agent-shell image includes Python, uv, curl, jq, SQLite and
 unzip. It runs as UID 10001. Python/uv initialize a per-agent virtual

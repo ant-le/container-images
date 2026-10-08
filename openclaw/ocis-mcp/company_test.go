@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/xml"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -41,13 +43,31 @@ func fixture(t *testing.T) (*companyFiles, *map[string][]byte, string) {
 				w.WriteHeader(405)
 				return
 			}
+			if parent := path.Dir(r.URL.Path); parent != "/dav/spaces/write" {
+				if b, ok := files[parent]; !ok || b != nil {
+					w.WriteHeader(409)
+					return
+				}
+			}
 			files[r.URL.Path] = nil
 			w.WriteHeader(201)
 			return
 		}
 		if r.Method == "PUT" {
-			// Match oCIS 8.2.1: If-None-Match does NOT prevent overwrites.
-			_, existed := files[r.URL.Path]
+			if r.Header.Get("If-None-Match") != "" || r.Header.Get("If-Match") != "" {
+				t.Error("unsupported conditional-write guarantee")
+			}
+			old, existed := files[r.URL.Path]
+			if existed && old == nil {
+				w.WriteHeader(409)
+				return
+			}
+			if parent := path.Dir(r.URL.Path); parent != "/dav/spaces/write" {
+				if b, ok := files[parent]; !ok || b != nil {
+					w.WriteHeader(409)
+					return
+				}
+			}
 			b, _ := io.ReadAll(r.Body)
 			files[r.URL.Path] = b
 			if existed {
@@ -60,6 +80,25 @@ func fixture(t *testing.T) (*companyFiles, *map[string][]byte, string) {
 		b, ok := files[r.URL.Path]
 		if !ok {
 			w.WriteHeader(404)
+			return
+		}
+		if r.Method == "PROPFIND" {
+			if r.Header.Get("Depth") != "0" {
+				t.Error("parent lookup must be depth zero")
+			}
+			collection := ""
+			if b == nil {
+				collection = "<d:collection/>"
+			}
+			var href bytes.Buffer
+			xml.EscapeText(&href, []byte(r.URL.EscapedPath()))
+			w.WriteHeader(207)
+			fmt.Fprintf(w, `<d:multistatus xmlns:d="DAV:"><d:response><d:href>%s</d:href><d:propstat><d:prop><d:resourcetype>%s</d:resourcetype></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response></d:multistatus>`, href.String(), collection)
+			return
+		}
+		if r.Method != "GET" {
+			t.Errorf("unexpected DAV method %s", r.Method)
+			w.WriteHeader(405)
 			return
 		}
 		w.Header().Set("Content-Type", "application/octet-stream")
@@ -94,22 +133,23 @@ func TestCompanyBinaryRoundTrip(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, staged.TransferID+".output"), want, 0600); err != nil {
 		t.Fatal(err)
 	}
-	_, published, err := f.publish(ctx, nil, companyExport{"write", "outputs/report.pdf", staged.TransferID, staged.SHA256})
-	if err != nil || published.SHA256 != staged.SHA256 {
+	_, published, err := f.publish(ctx, nil, companyExport{"write", "report.pdf", staged.TransferID, staged.SHA256})
+	if err != nil || published.SHA256 != staged.SHA256 || published.Path != "report.pdf" {
 		t.Fatalf("publish: %v", err)
 	}
 	if !bytes.Equal((*files)["/dav/spaces/write/"+published.Path], want) {
 		t.Fatal("remote bytes differ")
 	}
-	_, second, err := f.publish(ctx, nil, companyExport{"write", "outputs/report.pdf", staged.TransferID, staged.SHA256})
-	if err != nil || second.Path == published.Path {
-		t.Fatal("reused an output path", err)
+	updated := []byte("updated binary\x00\xff")
+	if err := os.WriteFile(filepath.Join(root, staged.TransferID+".output"), updated, 0600); err != nil {
+		t.Fatal(err)
 	}
-	if !bytes.Equal((*files)["/dav/spaces/write/"+published.Path], want) {
-		t.Fatal("old output changed")
-	}
-	if _, _, err = f.publish(ctx, nil, companyExport{"write", published.Path, staged.TransferID, staged.SHA256}); err == nil {
-		t.Fatal("allowed targeting reserved collection")
+	updatedHash := fmt.Sprintf("%x", sha256.Sum256(updated))
+	for _, destination := range []string{"report.pdf", "reports/2026/report.pdf", "reports/2026/report.pdf"} {
+		_, result, err := f.publish(ctx, nil, companyExport{"write", destination, staged.TransferID, updatedHash})
+		if err != nil || result.Path != destination || result.SHA256 != updatedHash || !bytes.Equal((*files)["/dav/spaces/write/"+destination], updated) {
+			t.Fatal("exact-path create/replace failed", result, err)
+		}
 	}
 	if _, _, err = f.publish(ctx, nil, companyExport{"write", "outputs/wrong.pdf", staged.TransferID, strings.Repeat("0", 64)}); err == nil {
 		t.Fatal("wrong hash accepted")
@@ -136,7 +176,7 @@ func TestCompanyPathsAndLimits(t *testing.T) {
 		t.Fatal(got, err)
 	}
 	f, _, _ := fixture(t)
-	if _, _, err := f.createText(context.Background(), nil, companyText{"write", "outputs/a.md", strings.Repeat("x", int(textLimit+1))}); err == nil {
+	if _, _, err := f.writeText(context.Background(), nil, companyText{"write", "a.md", strings.Repeat("x", int(textLimit+1))}); err == nil {
 		t.Fatal("oversize text accepted")
 	}
 	b := boundedWriter{io.Discard, 3}
@@ -180,10 +220,20 @@ func TestCompanyToolSurface(t *testing.T) {
 	if len(list.Tools) != 6 {
 		t.Fatalf("unexpected tools: %v", list.Tools)
 	}
+	foundWrite := false
 	for _, tool := range list.Tools {
-		if strings.Contains(tool.Name, "delete") || tool.Name == "ocis_upload_file" || tool.Name == "ocis_download_file" {
+		if tool.Name == "ocis_write_text" {
+			foundWrite = true
+			if !strings.Contains(tool.Description, "replace") || !strings.Contains(tool.Description, "last-writer-wins") {
+				t.Fatal("write contract omits replacement or concurrency semantics")
+			}
+		}
+		if strings.Contains(tool.Name, "delete") || tool.Name == "ocis_upload_file" || tool.Name == "ocis_download_file" || tool.Name == "ocis_create_text" {
 			t.Fatal("unsafe upstream tool registered")
 		}
+	}
+	if !foundWrite {
+		t.Fatal("missing ocis_write_text")
 	}
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "ocis_delete_file", Arguments: map[string]any{}})
 	if err == nil && (result == nil || !result.IsError) {
@@ -313,7 +363,7 @@ func TestCompanyInternalRoutePreservesTLSIdentity(t *testing.T) {
 }
 
 func TestCompanyAmbiguousPublishIdentifiesDestination(t *testing.T) {
-	for _, mode := range []string{"lost-put-response", "read-back-denied"} {
+	for _, mode := range []string{"lost-put-response", "read-back-denied", "read-back-mismatch"} {
 		t.Run(mode, func(t *testing.T) {
 			var storedPath string
 			srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -330,13 +380,17 @@ func TestCompanyAmbiguousPublishIdentifiesDestination(t *testing.T) {
 					}
 					w.WriteHeader(201)
 				case "GET":
-					w.WriteHeader(403)
+					if mode == "read-back-mismatch" {
+						w.Write([]byte("racing")) // Same length, different checksum.
+					} else {
+						w.WriteHeader(403)
+					}
 				}
 			}))
 			defer srv.Close()
 			f := &companyFiles{cfg: &config.Config{OcisURL: srv.URL}, http: srv.Client(), writeSpace: "write", readSpaces: map[string]bool{"write": true}}
-			_, _, err := f.putVerified(context.Background(), companyPath{"write", "outputs/result.md"}, strings.NewReader("result"))
-			if err == nil || storedPath == "" || !strings.Contains(err.Error(), strings.TrimPrefix(storedPath, "/dav/spaces/write/")) || !strings.Contains(err.Error(), `Space "write"`) {
+			_, _, err := f.putVerified(context.Background(), companyPath{"write", "reports/result.md"}, strings.NewReader("result"))
+			if err == nil || storedPath != "/dav/spaces/write/reports/result.md" || !strings.Contains(err.Error(), `at "reports/result.md"`) || !strings.Contains(err.Error(), `Space "write"`) {
 				t.Fatal("lost reconciliation target", err)
 			}
 		})
