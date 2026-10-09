@@ -24,9 +24,11 @@ from `server`'s nonsecret scope registry. Catalog and transfer profiles use the
 same identity/scope; listing, search and direct reads cannot use another agent's
 Spaces through the connector. Search requires one allowed Space ID. Transfers
 also require a fixed sandbox binding; catalog-only agents need no sandbox.
-Four scoped catalog/text connectors are active in the server deployment;
-binary-transfer connectors remain disabled. This checkout's exact-path write
-contract is pending image publication and GitOps rollout.
+Catalog/transfer activation is owned by the server configuration; consult that
+repository for live rollout and acceptance evidence. The staging helper opens
+the fixed allowed `/sandbox` anchor directly, not `/`, which OpenShell's
+filesystem policy deliberately makes unreadable. All directory hops still
+reject symlinks; no policy broadening is required.
 The image build runs Go and Python security/transfer tests before packaging.
 
 Catalog tool `ocis_write_text(space_id, path, content)` creates or replaces UTF-8
