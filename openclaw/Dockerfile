@@ -14,7 +14,7 @@ RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache
     && python3 -B -m unittest discover -s internal/tools -p 'test_staging.py' -v
 ARG TARGETARCH
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -trimpath -ldflags='-s -w -X main.version=1.1.0-company.2' -o /ocis-company-mcp ./cmd/ocis-mcp-server
+    CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -trimpath -ldflags='-s -w -X main.version=1.1.0-company.3' -o /ocis-company-mcp ./cmd/ocis-mcp-server
 
 FROM docker.io/openclaw/openclaw:2026.9.7@sha256:0da12cd49983fcb5e4915fd3135ce7a33d82f93649b1df6964946d2c1d1dbcfc AS whisper-build
 

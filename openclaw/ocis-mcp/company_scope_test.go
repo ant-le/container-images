@@ -18,7 +18,7 @@ import (
 
 func TestCompanyPolicyBindsIdentityAndClearsStaleScope(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "policy.json")
-	if err := os.WriteFile(path, []byte(`{"workshop":{"username":"agent-workshop","read_space_ids":["workshops"],"write_space_id":"","sandbox":"workshop-fixed"},"stocks":{"username":"agent-stocks","read_space_ids":["stocks"]}}`), 0600); err != nil {
+	if err := os.WriteFile(path, []byte(`{"workshop":{"username":"agent-workshop","read_space_ids":["workshops"],"write_space_id":"","sandbox":"workshop-fixed"},"stocks":{"username":"agent-stocks","read_space_ids":["stocks"],"write_space_id":"stocks","allow_delete":true}}`), 0600); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("OCIS_MCP_POLICY_FILE", path)
@@ -27,6 +27,7 @@ func TestCompanyPolicyBindsIdentityAndClearsStaleScope(t *testing.T) {
 	t.Setenv("OCIS_MCP_READ_SPACE_IDS", `["old"]`)
 	t.Setenv("OCIS_MCP_WRITE_SPACE_ID", "old")
 	t.Setenv("OCIS_MCP_SANDBOX", "old")
+	t.Setenv("OCIS_MCP_ALLOW_DELETE", "true")
 	if configureScope() == nil {
 		t.Fatal("cross-agent credential accepted")
 	}
@@ -34,8 +35,13 @@ func TestCompanyPolicyBindsIdentityAndClearsStaleScope(t *testing.T) {
 	if err := configureScope(); err != nil {
 		t.Fatal(err)
 	}
-	if os.Getenv("OCIS_MCP_READ_SPACE_IDS") != `["workshops"]` || os.Getenv("OCIS_MCP_WRITE_SPACE_ID") != "" || os.Getenv("OCIS_MCP_SANDBOX") != "workshop-fixed" {
+	if os.Getenv("OCIS_MCP_READ_SPACE_IDS") != `["workshops"]` || os.Getenv("OCIS_MCP_WRITE_SPACE_ID") != "" || os.Getenv("OCIS_MCP_SANDBOX") != "workshop-fixed" || os.Getenv("OCIS_MCP_ALLOW_DELETE") != "false" {
 		t.Fatal("stale scope or wrong binding")
+	}
+	t.Setenv("OCIS_MCP_AGENT", "stocks")
+	t.Setenv("OCIS_MCP_APP_TOKEN_USER", "agent-stocks")
+	if err := configureScope(); err != nil || os.Getenv("OCIS_MCP_ALLOW_DELETE") != "true" {
+		t.Fatal("administrator delete opt-in was not loaded", err)
 	}
 	t.Setenv("OCIS_MCP_AGENT", "unknown")
 	if configureScope() == nil {

@@ -45,9 +45,23 @@ time, not a lasting lock. oCIS 8.2.1 does not enforce `If-None-Match` on PUT.
 `ocis_write_text` replaces the former `ocis_create_text` name; no alias is exposed.
 There is no remote `outputs/<random>/` allocation or mandatory `outputs/` prefix.
 Random local transfer tickets and sandbox staging confinement are unchanged.
-The connector does not expose remote delete, move or copy, and cannot write to
-canonical or other agents' Spaces. Existing backend Editor access to the own
-output Space is sufficient; no UI permission change is needed.
+An administrator-owned `allow_delete: true` scope enables catalog tool
+`ocis_delete_file(space_id, path, file_id)` for that identity only. It validates
+current path/ID metadata and Graph's regular-file facet, denies folders/Space roots,
+and uses the full ID-addressed DAV endpoint to soft-delete into the owning Space's
+trash. It verifies absence and handles an explicit missing-path/missing-ID retry;
+it never blindly repeats an ambiguous DELETE. Stale IDs, canonical and other-agent
+Spaces are denied. The default is disabled, including when stale environment
+settings disagree with the scope registry. Only local fixtures without a policy
+file may configure `OCIS_MCP_ALLOW_DELETE=true` directly.
+
+oCIS 8.2.1 ignores `If-Match` on DELETE. ID addressing reduces path-replacement
+risk but does not make concurrent edits/moves atomic; a backend namespace-unlink
+race remains. Avoid concurrent mutation and reconcile path/ID after errors. No
+remote move/copy, recursive-folder delete or permanent trash purge is exposed.
+Soft deletion tidies the Space, without guaranteeing disk/quota reclamation.
+Existing backend Editor access to the own output Space is sufficient; no UI
+permission change is needed.
 
 The lightweight agent-shell image includes Python, uv, curl, jq, SQLite and
 unzip. It runs as UID 10001. Python/uv initialize a per-agent virtual

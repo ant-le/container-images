@@ -192,6 +192,7 @@ func TestCompanyPathsAndLimits(t *testing.T) {
 }
 
 func TestCompanyToolSurface(t *testing.T) {
+	t.Setenv("OCIS_MCP_ALLOW_DELETE", "false")
 	t.Setenv("OCIS_MCP_PROFILE", "catalog")
 	t.Setenv("OCIS_MCP_WRITE_SPACE_ID", "write")
 	t.Setenv("OCIS_MCP_READ_SPACE_IDS", `["read","write"]`)
