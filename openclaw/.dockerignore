@@ -12,6 +12,8 @@ ocis-mcp/**
 !ocis-mcp/company_test.go
 !ocis-mcp/company_scope.go
 !ocis-mcp/company_scope_test.go
+!ocis-mcp/company_delete.go
+!ocis-mcp/company_delete_test.go
 !ocis-mcp/staging.py
 !ocis-mcp/test_staging.py
 !ocis-mcp/patch.py

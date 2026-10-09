@@ -42,12 +42,13 @@ var transferID = regexp.MustCompile(`^[0-9a-f]{32}$`)
 var shaPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
 type companyFiles struct {
-	cfg        *config.Config
-	http       *http.Client
-	writeSpace string
-	readSpaces map[string]bool
-	remote     func(context.Context, string, string, io.Reader, io.Writer) error
-	gate       chan struct{}
+	cfg         *config.Config
+	http        *http.Client
+	writeSpace  string
+	readSpaces  map[string]bool
+	allowDelete bool
+	remote      func(context.Context, string, string, io.Reader, io.Writer) error
+	gate        chan struct{}
 }
 
 // Profiles come from administrator-owned MCP commands, never tool arguments.
@@ -126,6 +127,7 @@ func RegisterCompany(s *mcp.Server, c *client.Client, cfg *config.Config) error 
 		return errors.New("company profile requires stdio and an app token")
 	}
 	f := &companyFiles{cfg: cfg, writeSpace: os.Getenv("OCIS_MCP_WRITE_SPACE_ID"), gate: make(chan struct{}, 1)}
+	f.allowDelete = os.Getenv("OCIS_MCP_ALLOW_DELETE") == "true"
 	f.readSpaces, err = parseReadSpaces(os.Getenv("OCIS_MCP_READ_SPACE_IDS"))
 	if err != nil {
 		return err
@@ -142,6 +144,9 @@ func RegisterCompany(s *mcp.Server, c *client.Client, cfg *config.Config) error 
 		mcp.AddTool(s, &mcp.Tool{Name: "ocis_read_text", Description: "Read UTF-8 text up to 100 KiB. Binary files require the sandbox transfer tools.", Annotations: readOnlyAnnotations()}, f.readText)
 		if f.writeSpace != "" {
 			mcp.AddTool(s, &mcp.Tool{Name: "ocis_write_text", Description: "Create or replace a UTF-8 file at the exact requested relative path in this agent's configured output Space; create missing parent folders and verify SHA-256 by read-back. Existing files are replaced: last-writer-wins, with no atomic compare-and-swap or concurrent-update protection.", Annotations: mutatingAnnotations()}, f.writeText)
+			if f.allowDelete {
+				mcp.AddTool(s, &mcp.Tool{Name: "ocis_delete_file", Description: "Soft-delete one verified regular file from this agent's own output Space into that Space's trash. Supply its exact relative path and full file_id from current metadata. Refuses folders, Space roots, stale IDs and other Spaces. Uses ID-addressed DELETE, not recursive pathname deletion. No atomic ETag/concurrent-update guarantee: avoid concurrent edits/moves; inspect path and file ID before retry after an ambiguous failure. Does not purge trash or guarantee disk/quota reclamation.", Annotations: destructiveAnnotations()}, f.deleteFile)
+			}
 		}
 		return nil
 	}

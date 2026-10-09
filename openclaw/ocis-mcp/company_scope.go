@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -19,6 +20,7 @@ type agentScope struct {
 	ReadSpaceIDs []string `json:"read_space_ids"`
 	WriteSpaceID string   `json:"write_space_id"`
 	Sandbox      string   `json:"sandbox"`
+	AllowDelete  bool     `json:"allow_delete"`
 }
 
 func configureScope() error {
@@ -46,6 +48,7 @@ func configureScope() error {
 	ids, _ := json.Marshal(scope.ReadSpaceIDs)
 	for key, value := range map[string]string{
 		"OCIS_MCP_READ_SPACE_IDS": string(ids), "OCIS_MCP_WRITE_SPACE_ID": scope.WriteSpaceID, "OCIS_MCP_SANDBOX": scope.Sandbox,
+		"OCIS_MCP_ALLOW_DELETE": strconv.FormatBool(scope.AllowDelete),
 	} {
 		if err := os.Setenv(key, value); err != nil {
 			return err
