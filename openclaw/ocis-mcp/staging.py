@@ -20,11 +20,15 @@ ROOT = "/sandbox/.ocis-transfer"
 
 
 def directory(path):
-    fd = os.open("/", os.O_RDONLY | os.O_DIRECTORY)
+    parts = path.strip("/").split("/")
+    if not path.startswith("/") or any(part in ("", ".", "..") for part in parts):
+        raise ValueError("invalid root")
+    # OpenShell permits /sandbox but deliberately denies listing /. Start at the
+    # existing allowed top-level directory; retain no-follow checks at every hop.
+    # The production path is fixed, not selected by the caller.
+    fd = os.open("/" + parts[0], os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     try:
-        for part in path.strip("/").split("/"):
-            if part in ("", ".", ".."):
-                raise ValueError("invalid root")
+        for part in parts[1:]:
             try:
                 os.mkdir(part, mode=0o700, dir_fd=fd)
             except FileExistsError:

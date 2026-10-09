@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import staging
 
@@ -27,6 +28,21 @@ class StagingTests(unittest.TestCase):
         Path(self.root, self.key + ".output").write_bytes(data[::-1])
         self.assertEqual(self.call("get"), data[::-1])
         self.call("release")
+        self.assertEqual(os.listdir(self.root), [])
+
+    def test_roundtrip_when_filesystem_root_is_not_readable(self):
+        real_open = os.open
+
+        def confined_open(path, *args, **kwargs):
+            if path == "/":
+                raise PermissionError("filesystem root is outside the sandbox policy")
+            return real_open(path, *args, **kwargs)
+
+        with patch("staging.os.open", side_effect=confined_open):
+            self.call("put", b"synthetic input")
+            Path(self.root, self.key + ".output").write_bytes(b"synthetic output")
+            self.assertEqual(self.call("get"), b"synthetic output")
+            self.call("release")
         self.assertEqual(os.listdir(self.root), [])
 
     def test_reject_links_and_special_files(self):
