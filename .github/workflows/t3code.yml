@@ -1,0 +1,153 @@
+name: T3 Code image
+
+on:
+  push:
+    branches: [main]
+    paths: [t3code/**, .github/workflows/t3code.yml, mise.toml]
+  pull_request:
+    paths: [t3code/**, .github/workflows/t3code.yml, mise.toml]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t3code-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with: {persist-credentials: false}
+      - uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db # v3
+        with: {version: 2026.9.9}
+      - run: mise run check
+  build:
+    needs: check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    outputs:
+      artifact: ${{ steps.archive.outputs.artifact-id }}
+      checksum: ${{ steps.save.outputs.checksum }}
+      image-id: ${{ steps.save.outputs.image-id }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with: {persist-credentials: false}
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: t3code
+          platforms: linux/amd64
+          load: true
+          tags: ghcr.io/ant-le/t3code:${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          # Fresh apt indexes/packages for each release; security scans gate this exact build.
+          no-cache: true
+      - name: Smoke-test without publishing credentials
+        env:
+          IMAGE: ghcr.io/ant-le/t3code:${{ github.sha }}
+          SMOKE_SCRIPT: t3code/verify.sh
+        run: bash "$SMOKE_SCRIPT" "$IMAGE"
+      - name: Scan the exact image
+        id: scan
+        env:
+          IMAGE: ghcr.io/ant-le/t3code:${{ github.sha }}
+        run: bash t3code/scan.sh "docker:$IMAGE" scan.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always() && steps.scan.outcome != 'skipped'
+        with:
+          name: vulnerability-report
+          path: scan.json
+          retention-days: 30
+          if-no-files-found: error
+      - name: Transfer the tested image without rebuilding
+        id: save
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        env:
+          IMAGE: ghcr.io/ant-le/t3code:${{ github.sha }}
+        run: |
+          docker save "$IMAGE" -o image.tar
+          echo "checksum=$(sha256sum image.tar | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          echo "image-id=$(docker image inspect "$IMAGE" --format '{{.Id}}')" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        id: archive
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        with:
+          name: tested-image
+          path: |
+            image.tar
+            scan.json
+          compression-level: 0
+          retention-days: 7
+          if-no-files-found: error
+  publish:
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          artifact-ids: ${{ needs.build.outputs.artifact }}
+          merge-multiple: true
+      - name: Verify transferred image
+        env:
+          EXPECTED: ${{ needs.build.outputs.checksum }}
+        run: |
+          [[ "$EXPECTED" =~ ^[0-9a-f]{64}$ ]]
+          printf '%s  image.tar\n' "$EXPECTED" | sha256sum -c -
+          docker load -i image.tar
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish and bind registry content to the tested image
+        id: publish
+        env:
+          IMAGE: ghcr.io/ant-le/t3code:${{ github.sha }}
+          IMAGE_NAME: ghcr.io/ant-le/t3code
+          SOURCE_SHA: ${{ github.sha }}
+          EXPECTED_ID: ${{ needs.build.outputs.image-id }}
+        run: |
+          test "$(docker image inspect "$IMAGE" --format '{{.Id}}')" = "$EXPECTED_ID"
+          docker push "$IMAGE"
+          reference=$(docker image inspect "$IMAGE" --format '{{index .RepoDigests 0}}')
+          digest=${reference##*@}
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          docker pull "$reference"
+          test "$(docker image inspect "$reference" --format '{{.Id}}')" = "$EXPECTED_ID"
+          export PUBLISHED_DIGEST="$digest"
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          report = json.loads(Path('scan.json').read_text())
+          assert report['source']['target']['imageID'] == os.environ['EXPECTED_ID']
+          receipt = {
+              'image': os.environ['IMAGE_NAME'], 'digest': os.environ['PUBLISHED_DIGEST'],
+              'revision': os.environ['SOURCE_SHA'], 'config_digest': os.environ['EXPECTED_ID'],
+              'run_id': os.environ['GITHUB_RUN_ID'], 'scanner': report['descriptor']['version'],
+              'database_built': report['descriptor']['db']['status']['built'],
+              'fixable_high_critical': 0,
+          }
+          Path('publication.json').write_text(json.dumps(receipt) + '\n')
+          PY
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          echo "Published scanned image: \`$reference\`. Publication does not deploy." >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: t3-publication-${{ github.sha }}
+          path: publication.json
+          retention-days: 90
+          if-no-files-found: error

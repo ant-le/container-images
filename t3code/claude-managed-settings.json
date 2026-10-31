@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "disableBypassPermissionsMode": "disable",
+    "deny": [
+      "Read(//home/t3/.codex/**)",
+      "Read(//home/t3/.claude/**)",
+      "Read(//home/t3/.claude.json)",
+      "Read(//home/t3/.config/gh/**)",
+      "Read(//home/t3/.t3/**)",
+      "Read(//home/t3/.ssh/**)",
+      "Read(//home/t3/.git-credentials)"
+    ]
+  },
+  "sandbox": {
+    "enabled": true,
+    "failIfUnavailable": true,
+    "allowUnsandboxedCommands": false,
+    "enableWeakerNestedSandbox": false,
+    "enableWeakerNetworkIsolation": false,
+    "filesystem": {
+      "denyRead": ["/home/t3/.codex", "/home/t3/.claude", "/home/t3/.claude.json", "/home/t3/.config/gh", "/home/t3/.t3", "/home/t3/.ssh", "/home/t3/.git-credentials"]
+    }
+  }
+}

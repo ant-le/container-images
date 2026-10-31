@@ -6,8 +6,8 @@ in their application repositories. Deployment configuration belongs in
 `ant-le/server`; never put cluster credentials or runtime data here.
 
 - Read README.md before changing the release workflow.
-- Run `mise run check`. For OpenClaw changes, also build the image and run
-  `bash openclaw/verify.sh <local-image>` when Docker is available.
+- Run `mise run check`. For T3 changes, also build the image and run
+  `bash t3code/verify.sh <local-image>` when Docker is available.
 - GitHub Actions builds once, smoke-tests that image, then pushes that same
   local image to GHCR. Do not manually publish images.
 - Preserve digest/checksum pins; do not include credentials or private files

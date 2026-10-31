@@ -1,0 +1,6 @@
+{
+  "defaultRuntimeMode": "approval-required",
+  "enableProviderUpdateChecks": false,
+  "enableAgentBrowserAccess": false,
+  "continueThreadsAfterServerUpdate": false
+}

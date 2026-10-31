@@ -1,7 +1,0 @@
-{
-  "name": "openclaw-openshell-runtime",
-  "private": true,
-  "dependencies": {
-    "@openclaw/openshell-sandbox": "2026.9.7"
-  }
-}

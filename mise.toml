@@ -4,29 +4,16 @@ actionlint = "1.7.7"
 
 [tasks.check]
 description = "Validate shell and GitHub Actions workflows"
-run = [
-  "bash -n openclaw/verify.sh",
-  "sh -n openclaw/verify-cron.sh",
-  "shellcheck openclaw/*.sh",
-  "bash -n agent-shell/verify.sh",
-  "sh -n agent-shell/python-env.sh agent-shell/profile.sh",
-  "shellcheck agent-shell/*.sh",
-  "actionlint",
-  "python3 -B -m unittest discover -s openclaw/ocis-mcp -p 'test_*.py' -v",
-]
+run = ["bash -n t3code/verify.sh", "sh -n t3code/entrypoint.sh", "shellcheck t3code/*.sh", "actionlint"]
 
-[tasks."openclaw:build"]
-description = "Build the OpenClaw image locally for verification only"
-run = "docker build --platform linux/amd64 -t openclaw-verify:local openclaw"
+[tasks."t3code:build"]
+description = "Build T3 locally for verification only; never publish"
+run = "docker build --platform linux/amd64 -t t3code-verify:local t3code"
 
-[tasks."openclaw:verify"]
-description = "Smoke-test a previously built local image"
-run = "bash openclaw/verify.sh openclaw-verify:local"
+[tasks."t3code:verify"]
+description = "Verify tools, restricted startup, pairing-code generation and persistence without credentials"
+run = "bash t3code/verify.sh t3code-verify:local"
 
-[tasks."agent-shell:build"]
-description = "Build the lightweight sandbox image locally for verification only"
-run = "docker build --platform linux/amd64 -t agent-shell-verify:local agent-shell"
-
-[tasks."agent-shell:verify"]
-description = "Check non-root package installation, file processing and persistence"
-run = "bash agent-shell/verify.sh agent-shell-verify:local"
+[tasks."t3code:scan"]
+description = "Scan the local software image; block fixable high/critical CVEs"
+run = "bash t3code/scan.sh docker:t3code-verify:local /tmp/t3code-scan.json"

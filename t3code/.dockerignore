@@ -1,0 +1,8 @@
+**
+!Dockerfile
+!entrypoint.sh
+!codex-requirements.toml
+!claude-managed-settings.json
+!default-settings.json
+!licenses/
+!licenses/**
