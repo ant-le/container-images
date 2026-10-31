@@ -21,6 +21,7 @@ docker run --rm "${security[@]}" --tmpfs '/home/t3:uid=10001,gid=10001' --entryp
   mkdir -p "$CODEX_HOME"
   t3 --version
   codex --version
+  codex-exec-server --help >/dev/null
   claude --version
   gh --version
   git --version
@@ -28,6 +29,20 @@ docker run --rm "${security[@]}" --tmpfs '/home/t3:uid=10001,gid=10001' --entryp
   python3 --version
   test ! -w /usr/local/bin
 '
+# Negotiate with the real code-mode helper; codex --version misses incomplete installs.
+docker run --rm -i "${security[@]}" --tmpfs '/home/t3:uid=10001,gid=10001' \
+  --entrypoint python3 "$image" - <<'PY'
+import json, struct, subprocess
+hello = json.dumps({'type': 'connection/hello', 'supportedVersions': [1],
+                    'requiredCapabilities': [], 'optionalCapabilities': []}).encode()
+result = subprocess.run(['codex-code-mode-host', '--listen', 'stdio'],
+                        input=struct.pack('<I', len(hello)) + hello,
+                        capture_output=True, check=True, timeout=15)
+length, = struct.unpack('<I', result.stdout[:4])
+reply = json.loads(result.stdout[4:4 + length])
+assert reply['type'] == 'connection/ready' and reply['selectedVersion'] == 1, reply
+print('PASS: Codex code-mode host handshake')
+PY
 # Load the real managed policy as the runtime user; unreadable/ignored policy fails.
 docker run --rm "${security[@]}" --tmpfs '/home/t3:uid=10001,gid=10001' \
   --entrypoint sh "$image" -ec 'mkdir -p "$CODEX_HOME"; exec codex app-server --print-startup-config' \

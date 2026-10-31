@@ -11,12 +11,15 @@ npm's Undici (6.29.1) and brace-expansion (5.0.11). These replace bundled
 packages without invoking a resolver or lifecycle scripts; recheck them on
 upstream upgrades. Checksums establish content identity, not upstream safety.
 Keep the full T3 distribution: the executable needs its sibling files.
+Codex also needs its matching `codex-code-mode-host` and `codex-exec-server`
+release binaries beside `codex`; all three artifacts are checksum-pinned.
 Tools live outside the writable home; runtime credentials belong on the server PVC.
 
 Run `mise run check`, `mise run t3code:build`, `mise run t3code:verify`, then
 `mise run t3code:scan`. The latter writes `/tmp/t3code-scan.json`.
 The smoke test uses disposable Docker storage and no real provider credentials.
-It checks non-root tools, read-only filesystem startup without network, pairing-code generation,
+It checks non-root tools, the Codex code-mode helper handshake, read-only filesystem
+startup without network, pairing-code generation,
 and environment/workspace persistence across container replacement. Real provider
 turns, browser/WebSocket access through Tailscale and sandbox compatibility still
 need end-to-end acceptance after deployment.

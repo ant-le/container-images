@@ -5,6 +5,8 @@ ARG T3_VERSION=0.1.6
 ARG T3_SHA256=7cf31da90dee41f524dd5b679ebb6d404637ca5d9dc6fd8bc019511d57bb77e6
 ARG CODEX_VERSION=0.166.0
 ARG CODEX_SHA256=a0bf572d2f93f056c6712a6da348e96078dc84f3885fd7be67807ef389cb3978
+ARG CODEX_CODE_MODE_HOST_SHA256=7588334fd47bc4003d970b70dfd4d1e4578491b1e9baa72976a4c2d7e97590da
+ARG CODEX_EXEC_SERVER_SHA256=16f698d576fcd1d94e5e38b5c6ce48168afad1d95737b1eb2d84b3f0219ea6e3
 ARG CLAUDE_VERSION=2.1.316
 ARG CLAUDE_SHA256=fd13c70000fec3f2116dfbcbb6121210b4a29328bf0e46210a59dd594a67d824
 ARG GH_VERSION=2.103.3
@@ -29,6 +31,14 @@ RUN mkdir -p /opt/t3 /tmp/codex /tmp/gh \
     && echo "${CODEX_SHA256}  /tmp/codex.tgz" | sha256sum -c - \
     && tar -xzf /tmp/codex.tgz -C /tmp/codex \
     && install -m 755 /tmp/codex/codex-x86_64-unknown-linux-musl /usr/local/bin/codex \
+    && curl -fsSL --retry 3 "https://github.com/openai/codex/releases/download/rust-v${CODEX_VERSION}/codex-code-mode-host-x86_64-unknown-linux-musl.tar.gz" -o /tmp/codex-host.tgz \
+    && echo "${CODEX_CODE_MODE_HOST_SHA256}  /tmp/codex-host.tgz" | sha256sum -c - \
+    && tar -xzf /tmp/codex-host.tgz -C /tmp/codex \
+    && install -m 755 /tmp/codex/codex-code-mode-host-x86_64-unknown-linux-musl /usr/local/bin/codex-code-mode-host \
+    && curl -fsSL --retry 3 "https://github.com/openai/codex/releases/download/rust-v${CODEX_VERSION}/codex-exec-server-x86_64-unknown-linux-musl.tar.gz" -o /tmp/codex-exec.tgz \
+    && echo "${CODEX_EXEC_SERVER_SHA256}  /tmp/codex-exec.tgz" | sha256sum -c - \
+    && tar -xzf /tmp/codex-exec.tgz -C /tmp/codex \
+    && install -m 755 /tmp/codex/codex-exec-server-x86_64-unknown-linux-musl /usr/local/bin/codex-exec-server \
     && curl -fsSL --retry 3 "https://downloads.claude.ai/claude-code-releases/${CLAUDE_VERSION}/linux-x64/claude" -o /tmp/claude \
     && echo "${CLAUDE_SHA256}  /tmp/claude" | sha256sum -c - \
     && install -m 755 /tmp/claude /usr/local/bin/claude \
@@ -36,7 +46,7 @@ RUN mkdir -p /opt/t3 /tmp/codex /tmp/gh \
     && echo "${GH_SHA256}  /tmp/gh.tgz" | sha256sum -c - \
     && tar -xzf /tmp/gh.tgz --strip-components=1 -C /tmp/gh \
     && install -m 755 /tmp/gh/bin/gh /usr/local/bin/gh \
-    && rm -rf /tmp/t3.tgz /tmp/codex /tmp/codex.tgz /tmp/claude /tmp/gh /tmp/gh.tgz
+    && rm -rf /tmp/t3.tgz /tmp/codex /tmp/codex.tgz /tmp/codex-host.tgz /tmp/codex-exec.tgz /tmp/claude /tmp/gh /tmp/gh.tgz
 
 # Patch shipped JS dependencies without npm resolution or lifecycle scripts.
 # These are patch releases in the same major, with tarball hashes reviewed in Git.
