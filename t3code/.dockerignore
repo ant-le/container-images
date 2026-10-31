@@ -6,3 +6,4 @@
 !default-settings.json
 !licenses/
 !licenses/**
+!collect-sources.py

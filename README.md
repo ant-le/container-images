@@ -46,8 +46,15 @@ Passing this gate is not a CVE-free claim or approval of unfixed findings.
 No manual image publication or workflow-dispatch path. Publication does not deploy. Before selecting a digest, review its complete CI scan report
 and record remaining finding dispositions; a local scan does not cover the CI build.
 
-Keep the GHCR package private. The server uses an independently provisioned,
-read-only image-pull Secret; the credential is never mounted in T3.
+The GHCR package is intended for public, anonymous pulls; the source repository
+can remain private. Preserve the bundled notices and exact Debian corresponding
+source archives under `/usr/share/source/t3code-bundle`. Source collection fails
+closed if a package's exact source version is unavailable. This adds compressed
+archives to the image, without a separate publication workflow. The unmodified
+Claude binary remains subject to Anthropic's terms and each user's own login.
+GitHub initially creates packages private; visibility is changed only after the
+redistribution-ready image is published. Remove any older private-only versions
+before making the package public, because visibility applies to all versions.
 After publication, record the digest and source SHA. The server release helper
 verifies registry content, platform, source labels, main ancestry, and the matching
 successful push-run publication receipt before proposing a deployment PR.

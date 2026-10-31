@@ -12,6 +12,7 @@ ARG GH_SHA256=4c806978ffce1cec70853302a56d70ac6da4f19bae7adca4e1a8ab00633dd91d
 
 RUN test "$(dpkg --print-architecture)" = amd64 \
     && apt-get update \
+    && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends \
        ca-certificates curl git tini python3 ripgrep jq openssh-client unzip \
        bubblewrap socat libatomic1 \
@@ -53,6 +54,10 @@ RUN curl -fsSL --retry 3 https://registry.npmjs.org/undici/-/undici-8.12.2.tgz -
     && tar -xzf /tmp/brace.tgz --strip-components=1 -C /usr/local/lib/node_modules/npm/node_modules/brace-expansion \
     && rm /tmp/undici-t3.tgz /tmp/undici-npm.tgz /tmp/brace.tgz
 
+COPY --chmod=755 collect-sources.py /tmp/collect-sources.py
+RUN python3 /tmp/collect-sources.py \
+    && rm /tmp/collect-sources.py \
+    && rm -rf /var/lib/apt/lists/*
 COPY licenses/ /usr/share/doc/t3code-bundle/
 COPY --chmod=755 entrypoint.sh /opt/t3/entrypoint.sh
 COPY --chmod=644 codex-requirements.toml /etc/codex/requirements.toml
