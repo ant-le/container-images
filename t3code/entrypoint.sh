@@ -15,4 +15,6 @@ try:
 except FileExistsError:
     pass
 PY
+# Register the bounded skill tool without changing unrelated provider settings.
+python3 -I /opt/t3/skills_mcp.py --configure
 exec /usr/bin/tini -s -- /opt/t3/t3 "$@"

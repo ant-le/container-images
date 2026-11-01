@@ -7,3 +7,5 @@
 !licenses/
 !licenses/**
 !collect-sources.py
+!skills_mcp.py
+!codex-config.toml

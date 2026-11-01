@@ -1,0 +1,4 @@
+# Image-owned additive MCP registration. No credentials or sandbox overrides.
+[mcp_servers.t3-skills]
+command = "/usr/bin/python3"
+args = ["-I", "/opt/t3/skills_mcp.py"]

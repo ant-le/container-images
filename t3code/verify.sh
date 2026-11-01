@@ -61,6 +61,7 @@ start() {
   return 1
 }
 start
+docker exec -i "$prefix" python3 - < "$(dirname "$0")/smoke_skills.py"
 docker exec "$prefix" python3 -c 'import json,os; from pathlib import Path; p=Path(os.environ["T3CODE_HOME"])/"userdata/settings.json"; s=json.loads(p.read_text()); assert s["defaultRuntimeMode"] == "approval-required"; assert not s["enableProviderUpdateChecks"]; s["continueThreadsAfterServerUpdate"]=True; p.write_text(json.dumps(s))'
 for endpoint in /api/projects /mcp '/ws?orchestrationProtocol=2'; do
   status=$(docker exec "$prefix" curl --silent --show-error --max-time 5 \
@@ -74,6 +75,7 @@ descriptor=$(docker exec "$prefix" curl --fail --silent http://127.0.0.1:3773/.w
 docker stop --time 30 "$prefix" >/dev/null
 docker rm "$prefix" >/dev/null
 start
+docker exec -i "$prefix" python3 - < "$(dirname "$0")/smoke_skills.py"
 docker exec "$prefix" python3 -c 'import json,os; from pathlib import Path; assert json.loads((Path(os.environ["T3CODE_HOME"])/"userdata/settings.json").read_text())["continueThreadsAfterServerUpdate"] is True'
 docker exec "$prefix" sh -ec 'test "$(cat "$HOME/projects/smoke.txt")" = persistent'
 restored=$(docker exec "$prefix" curl --fail --silent http://127.0.0.1:3773/.well-known/t3/environment)

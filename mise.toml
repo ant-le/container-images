@@ -4,7 +4,7 @@ actionlint = "1.7.7"
 
 [tasks.check]
 description = "Validate shell and GitHub Actions workflows"
-run = ["bash -n t3code/verify.sh", "sh -n t3code/entrypoint.sh", "shellcheck t3code/*.sh", "actionlint"]
+run = ["bash -n t3code/verify.sh", "sh -n t3code/entrypoint.sh", "shellcheck t3code/*.sh", "actionlint", "python3 -m unittest discover -s t3code/tests -v"]
 
 [tasks."t3code:build"]
 description = "Build T3 locally for verification only; never publish"

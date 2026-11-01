@@ -70,6 +70,8 @@ RUN python3 /tmp/collect-sources.py \
     && rm -rf /var/lib/apt/lists/*
 COPY licenses/ /usr/share/doc/t3code-bundle/
 COPY --chmod=755 entrypoint.sh /opt/t3/entrypoint.sh
+COPY --chmod=644 skills_mcp.py /opt/t3/skills_mcp.py
+COPY --chmod=644 codex-config.toml /etc/codex/config.toml
 COPY --chmod=644 codex-requirements.toml /etc/codex/requirements.toml
 COPY --chmod=644 claude-managed-settings.json /etc/claude-code/managed-settings.json
 COPY --chmod=644 default-settings.json /opt/t3/default-settings.json
