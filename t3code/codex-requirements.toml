@@ -3,4 +3,4 @@ allowed_sandbox_modes = ["read-only", "workspace-write"]
 allowed_approval_policies = ["untrusted", "on-request"]
 
 [permissions.filesystem]
-deny_read = ["/home/t3/.codex/auth.json", "/home/t3/.claude", "/home/t3/.claude.json", "/home/t3/.config/gh", "/home/t3/.t3", "/home/t3/.ssh", "/home/t3/.git-credentials"]
+deny_read = ["/home/t3/.t3-skills", "/home/t3/.codex/auth.json", "/home/t3/.claude", "/home/t3/.claude.json", "/home/t3/.config/gh", "/home/t3/.t3", "/home/t3/.ssh", "/home/t3/.git-credentials"]

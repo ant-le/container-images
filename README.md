@@ -32,6 +32,12 @@ provider, GitHub, SSH and T3 credential/state paths. These policies are immutabl
 on the deployed read-only root; user settings cannot relax them. Real T3/provider
 turns still require acceptance on the target host. Failure must stop activation.
 
+The proposed personal-skill workflow adds a bounded local `t3-skills` MCP tool
+for both providers. Agents can save instruction-only skills without filesystem
+access to credentials or general provider configuration. See
+[personal skills](t3code/SKILLS.md) for the trust boundary, limits, and rollout
+acceptance. Local validation is not deployment or authenticated T3 acceptance.
+
 ## Publication
 
 `.github/workflows/t3code.yml` contains separate check, build and publish jobs.
