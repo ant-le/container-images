@@ -25,7 +25,7 @@ turns, browser/WebSocket access through Tailscale and sandbox compatibility stil
 need end-to-end acceptance after deployment.
 
 Fresh homes start in Approval required mode, with provider updates, automatic
-thread continuation and browser downloads disabled. The image's root-owned
+thread continuation and agent browser access disabled. This does not disable browser-backed HTML rendering. The image's root-owned
 Codex requirements reject Full access and constrain approvals; Claude managed
 settings disable bypass and require its OS sandbox. Managed policies deny agent reads of the listed
 provider, GitHub, SSH and T3 credential/state paths. Codex includes both its login
@@ -81,3 +81,13 @@ OpenClaw (including Whisper) and agent-shell recipes and caller workflows are
 retired. Their history and already published packages remain available for
 recovery; this change does not delete registry images or running workloads.
 The server retirement runbook owns encrypted backup and live cleanup.
+
+## Development prerequisites
+
+The image supplies checksum-pinned mise 2026.10.25, Debian PostgreSQL 17/client,
+GCC, libc headers and make. No PostgreSQL service or default data cluster runs
+in the image. Project tool versions and test tasks remain in their mise.toml.
+Use workspace-local caches and start disposable PostgreSQL in the same sandboxed
+command as its tests. Do not give project tests production database credentials,
+a Docker socket, or an unsandboxed exception. The project lifecycle test must
+pass under both actual providers before claiming runtime compatibility.

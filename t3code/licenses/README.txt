@@ -1,5 +1,7 @@
 Third-party software notices
 
+mise 2026.10.25: MIT, see mise-MIT.txt.
+
 T3 Code 0.1.6: MIT, T3 Tools Inc. See T3-MIT.txt.
 Codex CLI 0.166.0: Apache-2.0, OpenAI. See Codex-Apache-2.0.txt
 and Codex-NOTICE.txt.
