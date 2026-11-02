@@ -9,6 +9,8 @@ ARG CODEX_CODE_MODE_HOST_SHA256=7588334fd47bc4003d970b70dfd4d1e4578491b1e9baa729
 ARG CODEX_EXEC_SERVER_SHA256=16f698d576fcd1d94e5e38b5c6ce48168afad1d95737b1eb2d84b3f0219ea6e3
 ARG CLAUDE_VERSION=2.1.316
 ARG CLAUDE_SHA256=fd13c70000fec3f2116dfbcbb6121210b4a29328bf0e46210a59dd594a67d824
+ARG MISE_VERSION=2026.10.25
+ARG MISE_SHA256=3c4d4abd8950e722543aa2ffe58dd9ee84430fc03c8a94d318f64b279229d8ff
 ARG GH_VERSION=2.103.3
 ARG GH_SHA256=4c806978ffce1cec70853302a56d70ac6da4f19bae7adca4e1a8ab00633dd91d
 
@@ -17,10 +19,18 @@ RUN test "$(dpkg --print-architecture)" = amd64 \
     && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends \
        ca-certificates curl git tini python3 ripgrep jq openssh-client unzip \
-       bubblewrap socat libatomic1 \
+       bubblewrap socat libatomic1 gcc libc6-dev make xz-utils \
+       postgresql-17 postgresql-client-17 \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 10001 t3 \
     && useradd --uid 10001 --gid t3 --home-dir /home/t3 --create-home t3
+
+RUN mkdir -p /tmp/mise \
+    && curl -fsSL --retry 3 "https://github.com/jdx/mise/releases/download/v${MISE_VERSION}/mise-v${MISE_VERSION}-linux-x64.tar.xz" -o /tmp/mise.tar.xz \
+    && echo "${MISE_SHA256}  /tmp/mise.tar.xz" | sha256sum -c - \
+    && tar -xJf /tmp/mise.tar.xz --strip-components=1 -C /tmp/mise \
+    && install -m 755 /tmp/mise/bin/mise /usr/local/bin/mise \
+    && rm -rf /tmp/mise /tmp/mise.tar.xz
 
 RUN mkdir -p /opt/t3 /tmp/codex /tmp/gh \
     && curl -fsSL --retry 3 "https://github.com/pingdotgg/t3code/releases/download/v${T3_VERSION}/t3-${T3_VERSION}-linux-x64.tar.gz" -o /tmp/t3.tgz \
@@ -68,6 +78,8 @@ COPY --chmod=755 collect-sources.py /tmp/collect-sources.py
 RUN python3 /tmp/collect-sources.py \
     && rm /tmp/collect-sources.py \
     && rm -rf /var/lib/apt/lists/*
+# Keep PostgreSQL binaries only; each test creates its own disposable data.
+RUN pg_dropcluster --stop 17 main
 COPY licenses/ /usr/share/doc/t3code-bundle/
 COPY --chmod=755 entrypoint.sh /opt/t3/entrypoint.sh
 COPY --chmod=644 skills_mcp.py /opt/t3/skills_mcp.py
@@ -86,7 +98,7 @@ ENV HOME=/home/t3 \
     GH_CONFIG_DIR=/home/t3/.config/gh \
     DISABLE_AUTOUPDATER=1 \
     T3CODE_TELEMETRY_ENABLED=false \
-    PATH=/usr/local/bin:/usr/bin:/bin
+    PATH=/usr/local/bin:/usr/lib/postgresql/17/bin:/usr/bin:/bin
 USER 10001:10001
 WORKDIR /home/t3
 EXPOSE 3773

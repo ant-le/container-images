@@ -27,7 +27,26 @@ docker run --rm "${security[@]}" --tmpfs '/home/t3:uid=10001,gid=10001' --entryp
   git --version
   node --version
   python3 --version
+  mise --version
+  gcc --version >/dev/null
+  initdb --version
+  pg_ctl --version
   test ! -w /usr/local/bin
+'
+# Exercise compilation on an executable workspace, like the production PVC.
+# Docker tmpfs defaults to noexec, unlike that PVC.
+docker run --rm "${security[@]}" --tmpfs '/home/t3:uid=10001,gid=10001,exec' \
+  --entrypoint bash "$image" -euc '
+  cd /home/t3
+  printf "int main(void) { return 0; }\n" > probe.c
+  gcc probe.c -o probe
+  ./probe
+  initdb -D /home/t3/pg -U smoke --auth=trust --no-locale > /dev/null
+  trap "pg_ctl -D /home/t3/pg -m immediate -w stop >/dev/null" EXIT
+  pg_ctl -D /home/t3/pg -l /home/t3/pg.log -o "-h 127.0.0.1 -k /home/t3 -p 55432" -w start >/dev/null
+  psql -X -h 127.0.0.1 -p 55432 -U smoke -d postgres -v ON_ERROR_STOP=1 \
+    -c "CREATE TABLE probe(id int); INSERT INTO probe VALUES (1);" >/dev/null
+  test "$(psql -X -At -h 127.0.0.1 -p 55432 -U smoke -d postgres -c "SELECT count(*) FROM probe")" = 1
 '
 # Negotiate with the real code-mode helper; codex --version misses incomplete installs.
 docker run --rm -i "${security[@]}" --tmpfs '/home/t3:uid=10001,gid=10001' \
