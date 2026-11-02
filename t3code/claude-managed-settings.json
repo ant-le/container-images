@@ -11,7 +11,14 @@
       "Read(//home/t3/.git-credentials)",
       "Read(//home/t3/.t3-skills/**)",
       "Edit(//home/t3/.t3-skills/**)",
-      "Edit(//home/t3/.agents/**)"
+      "Edit(//home/t3/.agents/**)",
+      "Edit(//home/t3/.codex/**)",
+      "Edit(//home/t3/.claude/**)",
+      "Edit(//home/t3/.claude.json)",
+      "Edit(//home/t3/.config/gh/**)",
+      "Edit(//home/t3/.t3/**)",
+      "Edit(//home/t3/.ssh/**)",
+      "Edit(//home/t3/.git-credentials)"
     ]
   },
   "sandbox": {
@@ -33,7 +40,14 @@
       ],
       "denyWrite": [
         "/home/t3/.agents",
-        "/home/t3/.t3-skills"
+        "/home/t3/.t3-skills",
+        "/home/t3/.codex",
+        "/home/t3/.claude",
+        "/home/t3/.claude.json",
+        "/home/t3/.config/gh",
+        "/home/t3/.t3",
+        "/home/t3/.ssh",
+        "/home/t3/.git-credentials"
       ]
     }
   }
