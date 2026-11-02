@@ -27,12 +27,14 @@ need end-to-end acceptance after deployment.
 Fresh homes start in Approval required mode, with provider updates, automatic
 thread continuation and browser downloads disabled. The image's root-owned
 Codex requirements reject Full access and constrain approvals; Claude managed
-settings disable bypass and require its OS sandbox. Both deny agent access to
-provider, GitHub, SSH and T3 credential/state paths. These policies are immutable
+settings disable bypass and require its OS sandbox. Managed policies deny agent reads of the listed
+provider, GitHub, SSH and T3 credential/state paths. Codex includes both its login
+file and separate MCP OAuth store. Claude pairs native Read/Edit denials with
+sandbox read/write denials; neither layer covers arbitrary external tools. These policies are immutable
 on the deployed read-only root; user settings cannot relax them. Real T3/provider
 turns still require acceptance on the target host. Failure must stop activation.
 
-The proposed personal-skill workflow adds a bounded local `t3-skills` MCP tool
+The personal-skill workflow provides a bounded local `t3-skills` MCP tool
 for both providers. Agents can save instruction-only skills without filesystem
 access to credentials or general provider configuration. See
 [personal skills](t3code/SKILLS.md) for the trust boundary, limits, and rollout
