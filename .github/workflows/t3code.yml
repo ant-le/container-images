@@ -39,6 +39,12 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with: {persist-credentials: false}
+      - name: Reclaim unused hosted-runner SDK space
+        run: |
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          # Dedicated ephemeral runner only; none of these SDKs are build inputs.
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
+          df -h / "$RUNNER_TEMP"
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
@@ -56,6 +62,22 @@ jobs:
           IMAGE: ghcr.io/ant-le/t3code:${{ github.sha }}
           SMOKE_SCRIPT: t3code/verify.sh
         run: bash "$SMOKE_SCRIPT" "$IMAGE"
+      - name: Release build cache before scanning
+        env:
+          IMAGE: ghcr.io/ant-le/t3code:${{ github.sha }}
+        run: |
+          # load:true already put the tested image in Docker, separate from BuildKit.
+          before=$(docker image inspect "$IMAGE" --format '{{.Id}}')
+          docker buildx prune --all --force
+          test "$(docker image inspect "$IMAGE" --format '{{.Id}}')" = "$before"
+          # Grype needs space for its DB, an image archive and unpacked layers.
+          available=$(df -Pk "$RUNNER_TEMP" | awk 'NR==2 {print $4}')
+          test "$available" -ge 12582912 || {
+            echo 'Less than 12 GiB available for scan/export; refusing publication' >&2
+            df -h / "$RUNNER_TEMP"
+            exit 1
+          }
+          df -h / "$RUNNER_TEMP"
       - name: Scan the exact image
         id: scan
         env:
