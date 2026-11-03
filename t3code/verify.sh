@@ -31,6 +31,8 @@ docker run --rm "${security[@]}" --tmpfs '/home/t3:uid=10001,gid=10001' --entryp
   gcc --version >/dev/null
   initdb --version
   pg_ctl --version
+  # Provider login shells can replace the image PATH; commands must still resolve.
+  /bin/sh -lc "initdb --version && pg_ctl --version && postgres --version"
   test ! -w /usr/local/bin
 '
 # Exercise compilation on an executable workspace, like the production PVC.

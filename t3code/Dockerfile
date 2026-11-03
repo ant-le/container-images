@@ -79,7 +79,10 @@ RUN python3 /tmp/collect-sources.py \
     && rm /tmp/collect-sources.py \
     && rm -rf /var/lib/apt/lists/*
 # Keep PostgreSQL binaries only; each test creates its own disposable data.
-RUN pg_dropcluster --stop 17 main
+RUN pg_dropcluster --stop 17 main \
+    && for tool in initdb pg_ctl postgres; do \
+         ln -s "/usr/lib/postgresql/17/bin/$tool" "/usr/local/bin/$tool"; \
+       done
 COPY licenses/ /usr/share/doc/t3code-bundle/
 COPY --chmod=755 entrypoint.sh /opt/t3/entrypoint.sh
 COPY --chmod=644 skills_mcp.py /opt/t3/skills_mcp.py
